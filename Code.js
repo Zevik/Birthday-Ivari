@@ -217,15 +217,21 @@ function updateBirthdays() {
   let lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
   
-  // מקבלים את הנתונים
-  let data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  // מקבלים את הנתונים - מגדילים את הטווח כדי לכלול את עמודה G
+  let data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
   
   // עוברים על כל שורה
   for (let i = 0; i < data.length; i++) {
-    let [name, hebDay, hebMonth, hebYear, gregorian, eventId] = data[i];
+    let [name, hebDay, hebMonth, hebYear, gregorian, eventId, skipMarker] = data[i];
     
     // מדלגים על שורה ריקה
     if (!name || !hebDay || !hebMonth) continue;
+    
+    // בודק אם יש ערך בעמודה G - אם כן, מדלג על השורה
+    if (skipMarker) {
+      Logger.log("[DEBUG] מדלג על שורה עבור: " + name + " כי יש ערך בעמודה G: " + skipMarker);
+      continue;
+    }
     
     // לוג פשוט להבנת הנתונים
     Logger.log("[DEBUG] מעבד שורה עבור: " + name + " | תאריך עברי: " + hebDay + " " + hebMonth + " " + hebYear);
