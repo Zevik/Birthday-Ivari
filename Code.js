@@ -451,9 +451,11 @@ function createOrUpdateCalendarEvent(name, dateObj, eventId, hebrewDate, age) {
     if (event) {
       event.setTitle(eventTitle);
       event.setAllDayDate(dateObj);
+      event.setColor(CalendarApp.EventColor.TANGERINE);
       return eventId;
     } else {
       event = calendar.createAllDayEvent(eventTitle, dateObj);
+      event.setColor(CalendarApp.EventColor.TANGERINE);
       return event.getId();
     }
   } catch (err) {
