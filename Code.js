@@ -23,25 +23,52 @@ function convertHebrewToGregorian(hebDay, hebMonth, hebYear) {
     let month = monthMap[hebMonth];
     if (!month) return null;
     
-    // בונים URL ל-API
-    let url = `https://www.hebcal.com/converter?cfg=json&hy=${hebYear || getCurrentHebrewYear()}&hm=${month}&hd=${day}&h2g=1`;
+    // מקבלים את השנה העברית הנוכחית
+    let currentHebrewYear = getCurrentHebrewYear();
     
-    // קוראים ל-API
+    // --- שימוש בתאריך קשיח לבדיקה ---
+    // תאריך היום ב-19 במרץ, 2025
+    let today = new Date(2025, 2, 19); // חודשים מתחילים מ-0 בג'אווה סקריפט
+    Logger.log("[FIXED] התאריך הנוכחי: " + today.toLocaleDateString());
+    
+    // --- המרת התאריך העברי ללועזי בשנה העברית הנוכחית ---
+    let url = `https://www.hebcal.com/converter?cfg=json&hy=${currentHebrewYear}&hm=${month}&hd=${day}&h2g=1`;
     let response = UrlFetchApp.fetch(url);
     let data = JSON.parse(response.getContentText());
     
-    // בודקים אם התאריך כבר עבר השנה
-    let date = new Date(data.gy, data.gm - 1, data.gd);
-    if (date < new Date()) {
-      // ממירים לשנה הבאה
-      url = `https://www.hebcal.com/converter?cfg=json&hy=${getCurrentHebrewYear() + 1}&hm=${month}&hd=${day}&h2g=1`;
+    // יוצרים את התאריך מהתשובה של ה-API
+    let dateThisYear = new Date(data.gy, data.gm - 1, data.gd);
+    Logger.log("[FIXED] התאריך לשנה הנוכחית: " + dateThisYear.toLocaleDateString());
+    
+    // --- בדיקה אם התאריך כבר עבר השנה ---
+    // השוואת מילישניות מאז 1.1.1970 ללא שעות
+    let todayWithoutTime = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    let dateThisYearWithoutTime = new Date(dateThisYear.getFullYear(), dateThisYear.getMonth(), dateThisYear.getDate()).getTime();
+    
+    Logger.log("[FIXED] מילישניות של היום: " + todayWithoutTime);
+    Logger.log("[FIXED] מילישניות של התאריך השנה: " + dateThisYearWithoutTime);
+    Logger.log("[FIXED] האם התאריך כבר עבר? " + (dateThisYearWithoutTime < todayWithoutTime));
+    
+    // אם התאריך כבר עבר, נמיר לשנה הבאה
+    if (dateThisYearWithoutTime < todayWithoutTime) {
+      Logger.log("[FIXED] התאריך כבר עבר! ממיר לשנה הבאה...");
+      
+      // קוראים ל-API פעם נוספת עם השנה העברית הבאה
+      url = `https://www.hebcal.com/converter?cfg=json&hy=${currentHebrewYear + 1}&hm=${month}&hd=${day}&h2g=1`;
       response = UrlFetchApp.fetch(url);
       data = JSON.parse(response.getContentText());
+      
+      // יוצרים את התאריך החדש מהתשובה של ה-API
+      let dateNextYear = new Date(data.gy, data.gm - 1, data.gd);
+      Logger.log("[FIXED] התאריך לשנה הבאה: " + dateNextYear.toLocaleDateString());
+      
+      return dateNextYear;
+    } else {
+      Logger.log("[FIXED] התאריך עוד לא עבר, משתמש בתאריך השנה הנוכחית");
+      return dateThisYear;
     }
-    
-    return new Date(data.gy, data.gm - 1, data.gd);
   } catch (err) {
-    Logger.log("שגיאה בהמרת תאריך: " + err);
+    Logger.log("[FIXED] שגיאה בהמרת תאריך: " + err);
     return null;
   }
 }
@@ -87,9 +114,9 @@ function convertHebrewYearToNumber(hebYear) {
   
   // ממירים את התחילית למספר
   let prefixMap = {
-    'תש': 5000, 'תר': 5900, 'תק': 5800,
-    'תפ': 5700, 'תמ': 5600, 'תל': 5500,
-    'תכ': 5400, 'ת': 5300
+    'תש': 700, 'תר': 600, 'תק': 500,
+    'תפ': 400, 'תמ': 300, 'תל': 200,
+    'תכ': 100, 'ת': 0
   };
   
   let prefixValue = prefixMap[prefix];
@@ -100,16 +127,85 @@ function convertHebrewYearToNumber(hebYear) {
   Logger.log("ערך התחילית: " + prefixValue);
   
   // ממירים את הסיומת למספר
-  let suffixValue = parseInt(suffix);
-  if (isNaN(suffixValue)) {
+  let suffixValue = convertHebrewLettersToNumber(suffix);
+  if (suffixValue === null) {
     Logger.log("לא הצלחנו להמיר את הסיומת: " + suffix);
     return null;
   }
   Logger.log("ערך הסיומת: " + suffixValue);
   
-  let result = prefixValue + suffixValue;
+  // מחברים את המספרים ומוסיפים 5000 לקבלת השנה העברית המלאה
+  let result = 5000 + prefixValue + suffixValue;
   Logger.log("המרת שנה עברית למספר: " + hebYear + " -> " + result);
   return result;
+}
+
+/**
+ * ממיר אותיות עבריות למספר
+ */
+function convertHebrewLettersToNumber(letters) {
+  if (!letters) return null;
+  
+  // מפה של אותיות עבריות לערכים מספריים
+  const hebrewLetterValues = {
+    'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+    'י': 10, 'כ': 20, 'ל': 30, 'מ': 40, 'נ': 50, 'ס': 60, 'ע': 70, 'פ': 80, 'צ': 90,
+    'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
+  };
+  
+  // בדיקה אם זה כבר מספר
+  if (!isNaN(letters)) {
+    return parseInt(letters);
+  }
+  
+  let value = 0;
+  
+  // מעבר על כל אות והמרתה למספר
+  for (let i = 0; i < letters.length; i++) {
+    const letter = letters[i];
+    const letterValue = hebrewLetterValues[letter];
+    
+    if (letterValue === undefined) {
+      Logger.log("אות לא מוכרת: " + letter);
+      return null;
+    }
+    
+    value += letterValue;
+  }
+  
+  return value;
+}
+
+/**
+ * מחשב את הגיל על פי שנים עבריות
+ */
+function calculateHebrewAge(birthYear, currentYear) {
+  if (!birthYear || !currentYear) return null;
+  
+  // חישוב ההפרש בין השנים
+  let age = currentYear - birthYear;
+  
+  // וידוא שהגיל הגיוני (בין 0 ל-120)
+  if (age < 0 || age > 120) {
+    Logger.log("חישוב הגיל נתן תוצאה לא הגיונית: " + age + ". בודק אפשרויות אחרות...");
+    
+    // אם שנת הלידה גדולה מ-5000, ייתכן שהיא כבר כוללת את ה-5000
+    if (birthYear > 5000 && currentYear > 5000) {
+      age = currentYear - birthYear;
+    } else if (birthYear < 1000 && currentYear > 5000) {
+      // אם שנת הלידה קטנה מ-1000, אולי צריך להוסיף 5000
+      age = currentYear - (birthYear + 5000);
+    }
+    
+    // בדיקה שוב שהגיל הגיוני
+    if (age < 0 || age > 120) {
+      Logger.log("עדיין לא הצלחנו לחשב גיל הגיוני. מחזיר null.");
+      return null;
+    }
+  }
+  
+  Logger.log("חישוב גיל סופי: " + currentYear + " - " + birthYear + " = " + age);
+  return age;
 }
 
 /**
@@ -131,33 +227,74 @@ function updateBirthdays() {
     // מדלגים על שורה ריקה
     if (!name || !hebDay || !hebMonth) continue;
     
-    // ממירים את התאריך העברי ללועזי
-    let convertedDate = convertHebrewToGregorian(hebDay, hebMonth, hebYear);
-    if (!convertedDate) continue;
+    // לוג פשוט להבנת הנתונים
+    Logger.log("[DEBUG] מעבד שורה עבור: " + name + " | תאריך עברי: " + hebDay + " " + hebMonth + " " + hebYear);
     
+    // --- מחשבים גיל בסיסי ---
     // רושמים את שנת הלידה והשנה הנוכחית בגיליון log
     let age = null;
+    let birthYear = null;
+    let currentYear = null;
+    let nextBirthdayYear = null;
+    let useNextYearAge = false;
+    
     try {
       let logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("log");
       if (logSheet) {
-        // כותבים ערכים קבועים לבדיקה
-        let birthYear = 5741;  // A2
-        let currentYear = 5785;  // B2
+        // המרת שנת הלידה למספר
+        birthYear = convertHebrewYearToNumber(hebYear);
+        currentYear = getCurrentHebrewYear();
         
-        // רושמים את השנים
+        // רושמים את הערכים בלוג
         logSheet.getRange(2, 1).setValue(birthYear);
         logSheet.getRange(2, 2).setValue(currentYear);
         
-        // מחשבים את הגיל ורושמים בעמודה C
-        age = currentYear - birthYear;
+        // מחשבים את הגיל הבסיסי ורושמים בעמודה C
+        age = calculateHebrewAge(birthYear, currentYear);
         logSheet.getRange(2, 3).setValue(age);
+        
+        Logger.log("[DEBUG] שנת לידה: " + birthYear + " | שנה נוכחית: " + currentYear + " | גיל בסיסי: " + age);
       }
     } catch (err) {
-      Logger.log("שגיאה בכתיבה לגיליון log: " + err);
+      Logger.log("[DEBUG] שגיאה בחישוב הגיל: " + err);
     }
     
-    // שומרים את התאריך המחושב
-    sheet.getRange(i + 2, 5).setValue(convertedDate);
+    // --- ממירים לתאריך הלועזי הנכון ---
+    let today = new Date(); // תאריך דינמי - התאריך הנוכחי
+    Logger.log("[DEBUG] תאריך היום: " + today.toLocaleDateString());
+    
+    // המרת התאריך העברי ללועזי עבור השנה הנוכחית או הבאה
+    let birthdayInfo = getNextBirthdayDateWithInfo(hebDay, hebMonth, today);
+    if (!birthdayInfo || !birthdayInfo.date) {
+      Logger.log("[DEBUG] לא הצלחנו להמיר את התאריך");
+      continue;
+    }
+    
+    const convertedDate = birthdayInfo.date;
+    useNextYearAge = birthdayInfo.isNextYear;
+    
+    Logger.log("[DEBUG] התאריך הלועזי המתוכנן: " + convertedDate.toLocaleDateString());
+    Logger.log("[DEBUG] האם משתמש בגיל של השנה הבאה? " + useNextYearAge);
+    
+    // מתקן את הגיל אם התאריך בשנה הבאה
+    if (useNextYearAge && age !== null) {
+      age = age + 1;
+      Logger.log("[DEBUG] הגיל המתוקן (בשנה הבאה): " + age);
+    }
+    
+    // רושמים את הגיל בעמודה E
+    if (age !== null) {
+      // בגלייונות אם מכניסים מספר שיכול להראות כמו תאריך, הוא מומר אוטומטית לתאריך
+      // לכן נוסיף גרש לפני המספר כדי שיישאר כמספר
+      sheet.getRange(i + 2, 5).setValue("'" + age);
+      Logger.log("[DEBUG] רושם גיל בעמודה E: " + age);
+    } else {
+      sheet.getRange(i + 2, 5).setValue("");
+    }
+    
+    // שומרים את התאריך המחושב בעמודה F
+    sheet.getRange(i + 2, 6).setValue(convertedDate);
+    Logger.log("[DEBUG] רושם תאריך בעמודה F: " + convertedDate.toLocaleDateString());
     
     // יוצרים או מעדכנים אירוע ביומן
     let newEventId = createOrUpdateCalendarEvent(
@@ -165,12 +302,131 @@ function updateBirthdays() {
       convertedDate,
       eventId,
       `${hebDay} ${hebMonth}`,
-      age  // מעבירים את הגיל שחישבנו
+      age  // מעבירים את הגיל המתוקן
     );
     
     if (newEventId && newEventId !== eventId) {
-      sheet.getRange(i + 2, 6).setValue(newEventId);
+      // שומרים את מזהה האירוע בעמודה G
+      sheet.getRange(i + 2, 7).setValue(newEventId);
+      Logger.log("[DEBUG] רושם מזהה אירוע בעמודה G: " + newEventId);
     }
+  }
+}
+
+/**
+ * מחשב את התאריך הלועזי של יום ההולדת הבא עם מידע נוסף
+ * מחזיר אובייקט עם התאריך והאם זו השנה הבאה
+ */
+function getNextBirthdayDateWithInfo(hebDay, hebMonth, today) {
+  try {
+    Logger.log("[FUNC] התחלת חישוב יום הולדת הבא: " + hebDay + " " + hebMonth);
+    
+    // תאריך דינמי אם לא מוגדר
+    if (!today) {
+      today = new Date(); // תאריך נוכחי
+    }
+    Logger.log("[FUNC] תאריך היום: " + today.toLocaleDateString());
+    
+    // מנקים את הנתונים
+    hebDay = hebDay.toString().replace(/['"]/g, '');
+    hebMonth = hebMonth.toString().replace(/['"]/g, '');
+    
+    // ממירים את היום למספר - בודקים אם זו אות עברית או מספר רגיל
+    let day;
+    if (!isNaN(hebDay)) {
+      // אם זה כבר מספר - משתמשים בו
+      day = parseInt(hebDay);
+    } else {
+      // אם זו אות עברית - ממירים למספר
+      let hebrewLetterValues = {
+        'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
+        'י': 10, 'כ': 20, 'ל': 30
+      };
+      
+      // בדיקה אם זה אות בודדת
+      if (hebDay.length === 1) {
+        day = hebrewLetterValues[hebDay];
+        Logger.log("[FUNC] ממיר אות עברית " + hebDay + " למספר " + day);
+      } else {
+        // אם יש יותר מאות אחת, ננסה להמיר באמצעות פונקציית convertHebrewLettersToNumber
+        day = convertHebrewLettersToNumber(hebDay);
+        Logger.log("[FUNC] ממיר מספר עברי " + hebDay + " למספר " + day);
+      }
+    }
+    
+    if (isNaN(day) || day === null) {
+      Logger.log("[FUNC] שגיאה: לא הצלחנו להמיר את היום למספר");
+      return null;
+    }
+    Logger.log("[FUNC] היום לאחר המרה: " + day);
+    
+    // ממירים את החודש לפורמט Hebcal
+    let monthMap = {
+      'ניסן': 'Nisan', 'אייר': 'Iyar', 'סיון': 'Sivan',
+      'תמוז': 'Tamuz', 'אב': 'Av', 'אלול': 'Elul',
+      'תשרי': 'Tishrei', 'חשון': 'Cheshvan', 'כסלו': 'Kislev',
+      'טבת': 'Tevet', 'שבט': 'Shvat', 'אדר': 'Adar'
+    };
+    
+    let month = monthMap[hebMonth];
+    if (!month) {
+      Logger.log("[FUNC] שגיאה: החודש אינו תקין");
+      return null;
+    }
+    
+    // מקבלים את השנה העברית הנוכחית
+    let currentHebrewYear = getCurrentHebrewYear();
+    Logger.log("[FUNC] השנה העברית הנוכחית: " + currentHebrewYear);
+    
+    // המרת התאריך העברי ללועזי בשנה העברית הנוכחית
+    let url = `https://www.hebcal.com/converter?cfg=json&hy=${currentHebrewYear}&hm=${month}&hd=${day}&h2g=1`;
+    Logger.log("[FUNC] URL לשנה הנוכחית: " + url);
+    let response = UrlFetchApp.fetch(url);
+    let data = JSON.parse(response.getContentText());
+    
+    // יוצרים את התאריך מהתשובה של ה-API
+    let dateThisYear = new Date(data.gy, data.gm - 1, data.gd);
+    Logger.log("[FUNC] תאריך לשנה הנוכחית: " + dateThisYear.toLocaleDateString());
+    
+    // בדיקה אם התאריך כבר עבר השנה
+    // נמיר את התאריכים למילישניות ללא שעות
+    let todayWithoutTime = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    let dateThisYearWithoutTime = new Date(dateThisYear.getFullYear(), dateThisYear.getMonth(), dateThisYear.getDate()).getTime();
+    
+    Logger.log("[FUNC] מילישניות של היום: " + todayWithoutTime);
+    Logger.log("[FUNC] מילישניות של התאריך בשנה הנוכחית: " + dateThisYearWithoutTime);
+    Logger.log("[FUNC] האם התאריך כבר עבר? " + (dateThisYearWithoutTime < todayWithoutTime));
+    
+    // אם התאריך כבר עבר, נחשב לשנה הבאה
+    if (dateThisYearWithoutTime < todayWithoutTime) {
+      Logger.log("[FUNC] התאריך כבר עבר! מחשב לשנה הבאה...");
+      
+      // קוראים ל-API פעם נוספת עם השנה העברית הבאה
+      url = `https://www.hebcal.com/converter?cfg=json&hy=${currentHebrewYear + 1}&hm=${month}&hd=${day}&h2g=1`;
+      Logger.log("[FUNC] URL לשנה הבאה: " + url);
+      response = UrlFetchApp.fetch(url);
+      data = JSON.parse(response.getContentText());
+      
+      // יוצרים את התאריך החדש מהתשובה של ה-API
+      let dateNextYear = new Date(data.gy, data.gm - 1, data.gd);
+      Logger.log("[FUNC] תאריך לשנה הבאה: " + dateNextYear.toLocaleDateString());
+      
+      // מחזירים את התאריך ומידע נוסף
+      return {
+        date: dateNextYear,
+        isNextYear: true
+      };
+    } else {
+      Logger.log("[FUNC] התאריך עוד לא עבר, משתמש בתאריך השנה הנוכחית");
+      // מחזירים את התאריך ומידע נוסף
+      return {
+        date: dateThisYear,
+        isNextYear: false
+      };
+    }
+  } catch (err) {
+    Logger.log("[FUNC] שגיאה בחישוב יום הולדת הבא: " + err);
+    return null;
   }
 }
 
