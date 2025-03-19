@@ -446,16 +446,27 @@ function createOrUpdateCalendarEvent(name, dateObj, eventId, hebrewDate, age) {
       `יום הולדת ${age} ל${name} - ${hebrewDate}` : 
       `יום הולדת של ${name} - ${hebrewDate}`;
     
+    // צבע כתום (6 הוא הקוד המספרי לצבע כתום/קלמנטינה ביומן גוגל)
+    const orangeColorId = "6";
+    
     let event = eventId ? calendar.getEventById(eventId) : null;
     
     if (event) {
       event.setTitle(eventTitle);
       event.setAllDayDate(dateObj);
-      event.setColor(CalendarApp.EventColor.TANGERINE);
+      try {
+        event.setColor(orangeColorId);
+      } catch (colorErr) {
+        Logger.log("שגיאה בהגדרת צבע לאירוע: " + colorErr + " - ממשיך בלי לשנות צבע");
+      }
       return eventId;
     } else {
       event = calendar.createAllDayEvent(eventTitle, dateObj);
-      event.setColor(CalendarApp.EventColor.TANGERINE);
+      try {
+        event.setColor(orangeColorId);
+      } catch (colorErr) {
+        Logger.log("שגיאה בהגדרת צבע לאירוע חדש: " + colorErr + " - ממשיך בלי להגדיר צבע");
+      }
       return event.getId();
     }
   } catch (err) {
